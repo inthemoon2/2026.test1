@@ -32,6 +32,7 @@
     </label>
     <button class="btn small" id="t-monitor">🖥 이탈 모니터 화면 열기</button>
     <button class="btn small ghost" id="t-csv">CSV 내려받기</button>
+    <button class="btn small" id="t-extend">⏱ 시험 시간 조정 (전체)</button>
     <span class="muted" id="t-summary"></span>
   </div>
 
@@ -80,7 +81,7 @@
     return api('t_list', { pw: PW }).then(function (r) {
       DATA = r; DATA.skew = r.now - Date.now();
       // 시험 시간(30분)이 끝났는데 제출하지 못한 학생이 있으면 자동 제출 처리 후 다시 불러옴
-      var expired = r.students.some(function (s) { return s.status !== '제출' && s.quizStart != null && r.now > s.quizStart + (r.examSec + 15) * 1000; });
+      var expired = r.students.some(function (s) { return s.status !== '제출' && s.quizStart != null && r.now > s.quizStart + ((s.examSec || r.examSec) + 15) * 1000; });
       if (expired && !load.busy) {
         load.busy = true;
         return api('t_finalize', { pw: PW }).catch(function () {}).then(function () { load.busy = false; return load(true); });
@@ -138,7 +139,7 @@
   // 진행 중인 학생의 남은 시험 시간(초). 시작 전이면 null
   function remain(s) {
     if (s.status === '제출' || s.quizStart == null) return null;
-    return Math.max(0, Math.round((s.quizStart + DATA.examSec * 1000 - (Date.now() + DATA.skew)) / 1000));
+    return Math.max(0, Math.round((s.quizStart + (s.examSec || DATA.examSec) * 1000 - (Date.now() + DATA.skew)) / 1000));
   }
   function renderScores(rs) {
     rs = rs.slice().sort(function (a, b) {
@@ -244,6 +245,9 @@
         '<button class="btn small ghost pbtn" data-q="' + p.q + '">적용</button>' + (p.partial ? '<span class="pill run">+' + p.partial + '점 부여됨</span>' : '') + '</div></div>';
     });
 
+    h += '<div class="insight" style="margin:6px 0 14px"><b>시험 시간 조정</b> (이 학생만): 개별 연장 ' + (d.extra / 60) + '분 · 전체 연장 ' + (d.globalExtra / 60) + '분 ' +
+      '<button class="btn small ghost" id="dext">이 학생 연장 설정</button>' +
+      (d.timeup ? ' <button class="btn small" id="dreopen">시험 재개 (시간종료로 제출된 답 이어서 풀기)</button>' : '') + '</div>';
     h += '<h3 style="margin-top:20px">이탈 기록</h3>';
     if (!d.logs.length) h += '<p class="muted">이탈 기록이 없습니다.</p>';
     else h += '<table class="areas"><tr><th>회차</th><th>문항</th><th>벗어난 시각</th><th>복귀</th><th class="r">시간</th><th></th></tr>' +
@@ -270,6 +274,15 @@
         api('t_partial', { pw: PW, id: d.id, q: q, pts: v }).then(function () { openDetail(d.id); }).catch(function (e) { alert(e.message); });
       };
     });
+    if ($('dext')) $('dext').onclick = function () {
+      var sec = parseMin(prompt(d.id + ' 학생에게만 더해 줄 시간(분). 예) 7.5 = 7분 30초, 0 = 개별 연장 없음', d.extra ? String(d.extra / 60) : ''));
+      if (sec === null) return;
+      api('t_extend', { pw: PW, id: d.id, sec: sec }).then(function () { openDetail(d.id); }).catch(function (e) { alert(e.message); });
+    };
+    if ($('dreopen')) $('dreopen').onclick = function () {
+      if (!confirm(d.id + ' 학생의 시험을 재개합니다. 시간 종료 전에 제출한 답은 그대로 두고, 자동으로 오답 처리된 뒤쪽 문항만 다시 풀 수 있게 됩니다. 남은 시험 시간이 있어야 하며, 학생은 새로고침 후 다시 로그인해야 합니다. 계속할까요?')) return;
+      api('t_reopen', { pw: PW, id: d.id }).then(function (r) { alert('재개되었습니다. 남은 시간 ' + Math.floor(r.remainSec / 60) + '분'); openDetail(d.id); }).catch(function (e) { alert(e.message); });
+    };
     function cancelLeave(n) {
       var msg = n == null ? d.id + ' 학생의 이탈 기록 전체를 취소하고 이탈 횟수·시간·감점을 0으로 되돌립니다. 계속할까요?'
         : d.id + ' 학생의 ' + n + '회차 이탈을 취소합니다(횟수 -1, 감점 ' + d.penaltyPerLeave + '점 복구). 계속할까요?';
@@ -285,6 +298,25 @@
       api('t_reset', { pw: PW, id: d.id }).then(function () { closeDetail(); });
     };
   }
+
+  /* ---------- 시험 시간 조정 ---------- */
+  function parseMin(v) {
+    if (v === null) return null;
+    var m = Number(String(v).replace(/[^0-9.]/g, ''));
+    if (!(m >= 0 && m <= 120) || Math.round(m * 2) !== m * 2) { alert('0~120분, 0.5분(30초) 단위로 입력하세요. 예) 7.5 = 7분 30초'); return null; }
+    return Math.round(m * 60);
+  }
+  $('t-extend').onclick = function () {
+    var cur = (DATA && DATA.globalExtra) || 0;
+    var v = prompt('전체 학생의 시험 시간을 늘립니다. (기본 30분에 더해지는 시간, 분 단위)
+예) 7분 30초 연장 → 7.5
+현재 연장: ' + (cur / 60) + '분
+0을 입력하면 연장이 없어집니다.', cur ? String(cur / 60) : '');
+    var sec = parseMin(v);
+    if (sec === null) return;
+    if (!confirm('모든 학생의 시험 시간을 ' + (30 + sec / 60) + '분(기본 30분 + 연장 ' + sec / 60 + '분)으로 설정합니다. 학생들이 쓴 답에는 영향이 없습니다. 적용할까요?')) return;
+    api('t_extend', { pw: PW, all: true, sec: sec }).then(function () { alert('적용되었습니다. 학생 화면의 남은 시간은 최대 45초 안에 바뀝니다.'); load(true); }).catch(function (e) { alert(e.message); });
+  };
 
   /* ---------- 이탈 모니터 / CSV ---------- */
   $('t-monitor').onclick = function () {

@@ -329,7 +329,7 @@
     S.timerId = setInterval(renderTimer, 500);
     ['visibilitychange', 'blur', 'focus', 'pageshow'].forEach(function (ev) { (ev === 'visibilitychange' ? document : window).addEventListener(ev, checkAway); });
     setInterval(checkAway, 700);
-    setInterval(function () { if (quizOn && !away) api('ping', { id: S.id }).catch(function () {}); }, 45000);
+    setInterval(function () { if (quizOn && !away) api('ping', { id: S.id }).then(function (r) { if (r && r.remainSec != null && !S.timeup) { S.deadline = Date.now() + r.remainSec * 1000; } }).catch(function () {}); }, 45000);
     window.addEventListener('beforeunload', function (e) { if (quizOn) { e.preventDefault(); e.returnValue = ''; } });
     // 붙여넣기 방지는 하지 않음(교사 재량). 우클릭 메뉴만 막아 실수 방지
   }
