@@ -219,7 +219,7 @@
     var fin = d.status === '제출';
     var h = '<div class="drawer-bg" id="dbg"><div class="drawer">' +
       '<div style="display:flex;align-items:center;gap:10px"><h2 style="margin:0">' + idLabel(d.id) + '</h2><button class="btn small ghost" id="dclose" style="margin-left:auto">닫기 ✕</button></div>' +
-      (fin ? '<div class="score" style="text-align:left"><div class="num">' + d.final + '<small> / 100점</small></div><div class="muted">영역 합계 ' + d.raw + ' − 감점 ' + d.penalty + '</div></div>' :
+      (fin ? '<div class="score" style="text-align:left"><div class="num">' + d.final + '<small> / 100점</small></div><div class="muted">영역 합계 ' + d.raw + (d.bonus ? ' + 부분 점수 ' + d.bonus : '') + ' − 감점 ' + d.penalty + '</div></div>' :
         '<p><span class="pill run">진행 중</span> ' + d.progress + '문항 제출</p>') +
       '<table class="areas"><tr><th>영역</th><th class="r">맞힌 개수</th><th class="r">점수</th></tr>' +
       d.areas.map(function (a) { return '<tr><td>' + esc(a.name) + '</td><td class="r">' + a.correct + '/' + a.total + '</td><td class="r">' + (fin ? a.score : '–') + '</td></tr>'; }).join('') + '</table>' +
@@ -238,7 +238,10 @@
         (d.manual[p.q] ? '<span class="pill run">수동수정</span> ' : '') + '<span class="muted">' + fmtSec(p.sec) + '</span> ' +
         '<button class="btn small ghost ov" data-q="' + p.q + '" data-ok="' + (p.ok ? 0 : 1) + '" style="float:right">' + (p.ok ? '오답으로 수정' : '정답으로 수정') + '</button>' +
         '<code>' + parts.map(function (x, i) { return (parts.length > 1 ? (i ? '(나) ' : '(가) ') : '') + esc(x); }).join('\n') + '</code>' +
-        '<div class="muted" style="font-size:.78rem;margin-top:2px">모범 답안: ' + esc(String(d.key[p.q]).split('‖').join('  /  ')) + '</div></div>';
+        '<div class="muted" style="font-size:.78rem;margin-top:2px">모범 답안: ' + esc(String(d.key[p.q]).split('‖').join('  /  ')) + '</div>' +
+        '<div style="margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap"><label style="font-size:.85rem"><b>부분 점수</b> +</label>' +
+        '<input type="number" class="pin" data-q="' + p.q + '" min="0" max="10" step="0.5" value="' + (p.partial || 0) + '" style="width:70px;padding:4px 6px"> 점 ' +
+        '<button class="btn small ghost pbtn" data-q="' + p.q + '">적용</button>' + (p.partial ? '<span class="pill run">+' + p.partial + '점 부여됨</span>' : '') + '</div></div>';
     });
 
     h += '<h3 style="margin-top:20px">이탈 기록</h3>';
@@ -257,6 +260,14 @@
     document.querySelectorAll('.ov').forEach(function (b) {
       b.onclick = function () {
         api('t_override', { pw: PW, id: d.id, q: Number(b.dataset.q), ok: b.dataset.ok === '1' }).then(function () { openDetail(d.id); }).catch(function (e) { alert(e.message); });
+      };
+    });
+    document.querySelectorAll('.pbtn').forEach(function (b) {
+      b.onclick = function () {
+        var q = Number(b.dataset.q);
+        var v = Number(document.querySelector('.pin[data-q="' + q + '"]').value);
+        if (!(v >= 0 && v <= 10) || Math.round(v * 2) !== v * 2) { alert('부분 점수는 0~10점, 0.5점 단위로 입력하세요. (0 = 취소)'); return; }
+        api('t_partial', { pw: PW, id: d.id, q: q, pts: v }).then(function () { openDetail(d.id); }).catch(function (e) { alert(e.message); });
       };
     });
     function cancelLeave(n) {

@@ -345,7 +345,7 @@
       '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div class="muted">' + idLabel(r.id) + ' · 제출 ' + esc(r.end) + '</div>' +
       '<button class="btn" id="pdf-top" style="margin-left:auto">📄 PDF로 저장</button></div>' +
       '<div class="score"><div class="num">' + r.final + '<small> / 100점</small></div>' +
-      '<div class="muted" style="margin-top:8px">영역별 점수 합계 ' + r.raw + '점' + (r.penalty ? ' − 이탈 감점 ' + r.penalty + '점' : '') + '</div></div>' +
+      '<div class="muted" style="margin-top:8px">영역별 점수 합계 ' + r.raw + '점' + (r.bonus ? ' + 교사 부분 점수 ' + r.bonus + '점' : '') + (r.penalty ? ' − 이탈 감점 ' + r.penalty + '점' : '') + '</div></div>' +
       '<table class="areas"><tr><th>평가 영역</th><th>문항별 결과</th><th class="r">맞힌 개수</th><th class="r">점수</th></tr>';
     r.areas.forEach(function (a) {
       var marks = a.qs.map(function (q) {
@@ -376,7 +376,7 @@
     var parts = String(p.answer).split('‖');
     var keyIdx = { a: 0, b: 1 };
     var noAns = !String(p.answer).replace(/‖/g, '').trim();
-    var h = '<div class="pq pb"><div class="pqh"><b>' + p.q + '번</b> <span class="pqm">' + (p.ok ? '○ 정답' : '× 오답') +
+    var h = '<div class="pq pb"><div class="pqh"><b>' + p.q + '번</b> <span class="pqm">' + (p.ok ? '○ 정답' : '× 오답') + (p.partial ? ' (부분 점수 +' + p.partial + ')' : '') +
       '</span> <span class="pqt">풀이 시간 ' + fmtSec(p.sec) + '</span></div>';
     q.blocks.forEach(function (b) {
       if (b.p) h += '<p class="pqp">' + b.p + '</p>';
@@ -403,7 +403,7 @@
     var h = '<h1>기계학습을 위한 데이터 탐색과 전처리 수행평가 – 결과</h1>' +
       '<p>학번 <b>' + esc(r.id) + '</b> &nbsp;·&nbsp; 시작 ' + esc(r.start) + ' &nbsp;·&nbsp; 제출 ' + esc(r.end) + '</p>' +
       '<p class="rscore">최종 점수 ' + r.final + ' / 100점</p>' +
-      '<p>영역별 점수 합계 ' + r.raw + '점 − 이탈 감점 ' + r.penalty + '점 (이탈 ' + r.leaveCount + '회, 총 ' + fmtSec(r.leaveSec) + ', 회당 -' + (r.penaltyPerLeave || 5) + '점)</p>' +
+      '<p>영역별 점수 합계 ' + r.raw + '점' + (r.bonus ? ' + 교사 부분 점수 ' + r.bonus + '점' : '') + ' − 이탈 감점 ' + r.penalty + '점 (이탈 ' + r.leaveCount + '회, 총 ' + fmtSec(r.leaveSec) + ', 회당 -' + (r.penaltyPerLeave || 5) + '점)</p>' +
       (r.usedSec != null ? '<p>시험 시간 ' + fmtSec(r.usedSec) + ' / ' + Math.round((r.examSec || 1800) / 60) + '분' + (r.timeup ? ' (시간 종료로 자동 제출)' : '') + '</p>' : '') +
       '<table class="pb"><tr><th>평가 영역</th><th>맞힌 개수</th><th>점수</th></tr>' +
       r.areas.map(function (a) { return '<tr><td>' + esc(a.name) + '</td><td>' + a.correct + ' / ' + a.total + '</td><td>' + a.score + ' / ' + a.max + '</td></tr>'; }).join('') + '</table>' +
