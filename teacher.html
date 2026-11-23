@@ -308,10 +308,7 @@
   }
   $('t-extend').onclick = function () {
     var cur = (DATA && DATA.globalExtra) || 0;
-    var v = prompt('전체 학생의 시험 시간을 늘립니다. (기본 30분에 더해지는 시간, 분 단위)
-예) 7분 30초 연장 → 7.5
-현재 연장: ' + (cur / 60) + '분
-0을 입력하면 연장이 없어집니다.', cur ? String(cur / 60) : '');
+    var v = prompt('전체 학생의 시험 시간을 늘립니다. (기본 30분에 더해지는 시간, 분 단위)\n예) 7분 30초 연장 → 7.5\n현재 연장: ' + (cur / 60) + '분\n0을 입력하면 연장이 없어집니다.', cur ? String(cur / 60) : '');
     var sec = parseMin(v);
     if (sec === null) return;
     if (!confirm('모든 학생의 시험 시간을 ' + (30 + sec / 60) + '분(기본 30분 + 연장 ' + sec / 60 + '분)으로 설정합니다. 학생들이 쓴 답에는 영향이 없습니다. 적용할까요?')) return;
