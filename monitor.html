@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>이탈 현황 모니터</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="monitor">
+
+<div id="gate" class="wrap login hidden">
+  <div class="card" style="background:#18212b;border-color:#2b3745">
+    <h2>교사 비밀번호</h2>
+    <input id="pw" type="password" class="tinput" style="width:100%;padding:12px;background:#0b1118;color:#e8eef5;border-color:#2b3745" autocomplete="current-password">
+    <div id="pw-err" class="err"></div>
+    <button id="pw-btn" class="btn" style="width:100%">열기</button>
+  </div>
+</div>
+
+<div id="mon" class="hidden">
+  <div class="mon-top">
+    <h1 id="mon-title">페이지 이탈 현황</h1>
+    <select id="mon-class" aria-label="반 선택"></select>
+  </div>
+  <div class="mon-grid" id="mon-grid"></div>
+</div>
+
+<script src="config.js"></script>
+<script src="common.js"></script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var PW = '', LAST = null, skew = 0;
+  var params = new URLSearchParams(location.search);
+  var CLS = params.get('class') || '';
+
+  function start(pw) {
+    return api('t_monitor', { pw: pw }).then(function (r) {
+      PW = pw; try { sessionStorage.setItem('tpw', pw); } catch (e) {}
+      $('gate').classList.add('hidden'); $('mon').classList.remove('hidden');
+      apply(r);
+      setInterval(poll, 4000);
+      setInterval(draw, 1000);
+    });
+  }
+  function poll() { api('t_monitor', { pw: PW }).then(apply).catch(function () {}); }
+  function apply(r) { LAST = r.rows; skew = r.now - Date.now(); fillSelect(); draw(); }
+
+  function fillSelect() {
+    var set = {};
+    LAST.forEach(function (s) { set[classOf(s.id)] = 1; });
+    var keys = Object.keys(set).sort();
+    if (!CLS && keys.length) CLS = keys[0];
+    var sel = $('mon-class');
+    sel.innerHTML = keys.map(function (k) { return '<option value="' + k + '">' + classLabel(k) + '</option>'; }).join('');
+    if (keys.indexOf(CLS) < 0 && CLS) sel.innerHTML += '<option value="' + CLS + '">' + classLabel(CLS) + '</option>';
+    sel.value = CLS;
+  }
+  $('mon-class').onchange = function () { CLS = this.value; draw(); };
+
+  function draw() {
+    if (!LAST || !CLS) return;
+    $('mon-title').textContent = classLabel(CLS) + ' 페이지 이탈 현황';
+    document.title = classLabel(CLS) + ' 이탈 현황';
+    var now = Date.now() + skew;
+    var rows = LAST.filter(function (s) { return classOf(s.id) === CLS; }).sort(function (a, b) { return a.id < b.id ? -1 : 1; });
+    if (!rows.length) { $('mon-grid').innerHTML = '<div class="mon-empty">아직 입장한 학생이 없습니다.</div>'; return; }
+    $('mon-grid').innerHTML = rows.map(function (s) {
+      var live = s.away != null ? Math.max(0, Math.round((now - s.away) / 1000)) : 0;
+      var total = s.sec + live;
+      var lv = s.count >= 3 ? 'l2' : s.count >= 1 ? 'l1' : '';
+      return '<div class="mon-card ' + lv + (s.away != null ? ' away' : '') + (s.done ? ' fin' : '') + '">' +
+        '<div class="sid">' + s.id + '</div>' +
+        '<div class="cnt">' + s.count + '<small>회</small></div>' +
+        '<div class="tm">' + fmtClock(total) + '</div>' +
+        (s.away != null ? '<span class="tag">⚠ 지금 이탈 중</span>' : '') + '</div>';
+    }).join('');
+  }
+
+  $('pw-btn').onclick = function () { start($('pw').value).catch(function (e) { $('pw-err').textContent = e.message; }); };
+  $('pw').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('pw-btn').click(); });
+
+  var saved = '';
+  try { saved = sessionStorage.getItem('tpw') || ''; } catch (e) {}
+  if (saved) start(saved).catch(function () { $('gate').classList.remove('hidden'); });
+  else $('gate').classList.remove('hidden');
+})();
+</script>
+</body>
+</html>

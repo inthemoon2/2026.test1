@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>수행평가 · 데이터 탐색과 전처리</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- 1. 학번 입력 -->
+<div id="s-login" class="wrap login">
+  <div class="card">
+    <h1>기계학습을 위한<br>데이터 탐색과 전처리</h1>
+    <p class="muted">수행평가 · 남극 펭귄 데이터</p>
+    <p style="margin-top:22px;font-weight:700">학번 4자리를 입력하세요</p>
+    <input id="idin" class="idinput" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="1101">
+    <p class="muted" style="font-size:.88rem;margin:6px 0 0">1학년 1반 1번 → <b>1101</b> · 2학년 3반 15번 → <b>2315</b></p>
+    <div id="login-err" class="err"></div>
+    <button id="login-btn" class="btn" style="width:100%">확인</button>
+  </div>
+</div>
+
+<!-- 2. 유의사항 -->
+<div id="s-notice" class="wrap hidden">
+  <div class="card">
+    <h1 id="notice-title">시작하기 전에 꼭 읽으세요</h1>
+    <div class="alert">
+      <b class="big">⚠ 평가 화면을 벗어나면 감점됩니다.</b>
+      <ul style="margin:10px 0 0;padding-left:20px">
+        <li>다른 탭·다른 창·다른 프로그램(저장된 파일, 메모장 등)으로 이동하면 <b>이탈 1회</b>로 기록됩니다.</li>
+        <li>이탈 <b>1회마다 <span class="pen">5</span>점 감점</b>되며, 벗어난 <b>횟수와 시간</b>이 모두 저장됩니다.</li>
+        <li>선생님 화면에 우리 반의 이탈 횟수와 시간이 <b>실시간으로 표시</b>됩니다.</li>
+      </ul>
+    </div>
+    <h3 style="margin-top:20px">평가 방법</h3>
+    <ul class="rules">
+      <li>문제는 <b>12문항</b>이며 <b>한 페이지에 한 문항</b>씩 나옵니다.</li>
+      <li>노란 <b>네모칸</b>에 코드를 직접 입력합니다. 띄어쓰기와 작은따옴표/큰따옴표 차이는 무시하고 채점합니다.</li>
+      <li><b>제출한 문항은 수정할 수 없고</b> 이전 문항으로 돌아갈 수 없습니다.</li>
+      <li>점수는 평가 영역별 맞힌 개수로 계산하고, 마지막에 이탈 감점을 뺍니다. 마지막 문항을 제출하면 <b>최종 점수</b>가 바로 보입니다.</li>
+      <li>결과 화면에서 <b>PDF로 저장</b>할 수 있습니다. 평가 도중에 창을 닫아도 같은 학번으로 들어오면 이어서 풀 수 있습니다. (창을 닫았다 다시 열어도 이탈로 기록될 수 있습니다)</li>
+    </ul>
+    <label class="check"><input type="checkbox" id="agree"> 이탈 시 감점되고, 횟수와 시간이 기록된다는 내용을 확인했습니다.</label>
+    <div class="actions"><button id="start-btn" class="btn" disabled>평가 시작</button></div>
+  </div>
+</div>
+
+<!-- 3. 문항 -->
+<div id="s-quiz" class="hidden">
+  <div class="topbar">
+    <div class="warnstrip">⚠ 이 화면을 벗어나면 이탈 1회당 <span class="pen">5</span>점 감점 · 횟수와 시간이 기록됩니다</div>
+    <div class="row">
+      <span class="id" id="q-id"></span>
+      <span class="muted" id="q-pos"></span>
+      <span class="leavebox" id="q-leave">이탈 0회 · 감점 0점</span>
+    </div>
+    <div class="progress" id="q-prog"></div>
+  </div>
+  <div class="wrap">
+    <div class="card">
+      <div class="qhead">
+        <span class="qnum" id="q-num"></span>
+        <span class="chip" id="q-area"></span>
+        <span class="chip lv" id="q-lv"></span>
+      </div>
+      <div class="qbody" id="q-body"></div>
+      <div class="actions">
+        <span class="muted" style="margin-right:auto;font-size:.88rem">제출하면 수정할 수 없습니다</span>
+        <button class="btn" id="q-submit">제출하고 다음 ▶</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 4. 결과 -->
+<div id="s-result" class="wrap hidden"></div>
+
+<div class="report" id="report"></div>
+<div id="modal-root"></div>
+
+<script src="config.js"></script>
+<script src="common.js"></script>
+<script src="figures.js"></script>
+<script src="questions.js"></script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var S = { id: '', cur: 1, progress: 0, leaveCount: 0, leaveSec: 0, pen: 5, result: null };
+  var quizOn = false, away = null, activeMs = 0, tickAt = null, submitting = false;
+
+  function show(name) {
+    ['s-login', 's-notice', 's-quiz', 's-result'].forEach(function (s) { $(s).classList.toggle('hidden', s !== name); });
+    window.scrollTo(0, 0);
+  }
+  function setPen(p) { S.pen = p; [].forEach.call(document.querySelectorAll('.pen'), function (e) { e.textContent = p; }); }
+
+  /* ---------- 모달 ---------- */
+  function modal(html, buttons, cls) {
+    var root = $('modal-root');
+    root.innerHTML = '<div class="modal-bg"><div class="modal ' + (cls || '') + '" role="dialog" aria-modal="true">' + html + '<div class="row"></div></div></div>';
+    var row = root.querySelector('.row');
+    buttons.forEach(function (b) {
+      var el = document.createElement('button');
+      el.className = 'btn ' + (b.cls || '');
+      el.textContent = b.text;
+      el.onclick = function () { root.innerHTML = ''; if (b.fn) b.fn(); };
+      row.appendChild(el);
+    });
+  }
+
+  /* ---------- 로그인 ---------- */
+  var ID_RE = /^[1-3][1-9](0[1-9]|[1-3][0-9]|40)$/;
+  $('idin').addEventListener('input', function () { this.value = this.value.replace(/\D/g, '').slice(0, 4); $('login-err').textContent = ''; });
+  $('idin').addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
+  $('login-btn').onclick = doLogin;
+
+  function doLogin() {
+    var id = $('idin').value.trim();
+    if (!ID_RE.test(id)) { $('login-err').textContent = '학번 4자리를 정확히 입력하세요. (예: 1101)'; return; }
+    $('login-btn').disabled = true;
+    api('login', { id: id }).then(function (r) {
+      S.id = id; setPen(r.penaltyPerLeave || 5);
+      if (r.state === 'done') { S.result = r.result; showResult(r.result); return; }
+      S.progress = r.progress; S.leaveCount = r.leaveCount; S.leaveSec = r.leaveSec; S.cur = r.progress + 1;
+      $('notice-title').textContent = r.progress > 0 ? id + ' · ' + r.progress + '문항까지 제출했습니다. 이어서 진행합니다' : '시작하기 전에 꼭 읽으세요';
+      show('s-notice');
+    }).catch(function (e) { $('login-err').textContent = e.message; })
+      .then(function () { $('login-btn').disabled = false; });
+  }
+
+  $('agree').onchange = function () { $('start-btn').disabled = !this.checked; };
+  $('start-btn').onclick = function () { startQuiz(); };
+
+  /* ---------- 문항 표시 ---------- */
+  function updateLeaveBox() {
+    var el = $('q-leave');
+    el.textContent = '이탈 ' + S.leaveCount + '회 · 감점 ' + (S.leaveCount ? '-' : '') + (S.leaveCount * S.pen) + '점';
+    el.classList.toggle('hit', S.leaveCount > 0);
+  }
+
+  function autosize(t) { t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; }
+
+  function renderQuestion() {
+    var q = QUESTIONS[S.cur - 1];
+    $('q-id').textContent = S.id;
+    $('q-pos').textContent = '문항 ' + S.cur + ' / ' + QUESTIONS.length;
+    $('q-num').textContent = q.n + '번';
+    $('q-area').textContent = AREA_NAMES[q.area];
+    $('q-lv').textContent = '난이도 ' + '★★★★'.slice(0, q.lvl);
+    var prog = '';
+    for (var i = 1; i <= QUESTIONS.length; i++) prog += '<i class="' + (i < S.cur ? 'done' : i === S.cur ? 'now' : '') + '"></i>';
+    $('q-prog').innerHTML = prog;
+    updateLeaveBox();
+
+    var body = $('q-body');
+    body.innerHTML = '';
+    q.blocks.forEach(function (b) {
+      var el;
+      if (b.p) { el = document.createElement('p'); el.innerHTML = b.p; body.appendChild(el); }
+      else if (b.fig) { el = document.createElement('div'); el.className = 'fig'; el.innerHTML = FIGURES[b.fig](); body.appendChild(el); }
+      else if (b.out) { el = document.createElement('div'); el.className = 'outtext'; el.textContent = b.out; body.appendChild(el); }
+      else if (b.tb) {
+        el = document.createElement('textarea'); el.className = 'textbox'; el.dataset.k = b.tb; el.placeholder = b.label || '';
+        el.setAttribute('autocomplete', 'off'); el.spellcheck = false; body.appendChild(el);
+      } else if (b.code) {
+        var blk = document.createElement('div'); blk.className = 'codeblock';
+        b.code.forEach(function (line) {
+          var ln = document.createElement('div'); ln.className = 'codeline';
+          line.forEach(function (seg) {
+            if (typeof seg === 'string') { var s = document.createElement('span'); s.className = 't'; s.textContent = seg; ln.appendChild(s); }
+            else if (seg.b) {
+              var w = document.createElement('div'); w.className = 'boxwrap';
+              var t = document.createElement('textarea');
+              t.className = 'box'; t.rows = seg.rows || 1; t.dataset.k = seg.b;
+              t.setAttribute('autocomplete', 'off'); t.setAttribute('autocapitalize', 'off'); t.setAttribute('autocorrect', 'off'); t.spellcheck = false;
+              t.setAttribute('aria-label', '정답 입력칸');
+              t.addEventListener('keydown', function (e) { if (e.key === 'Enter') e.preventDefault(); });
+              t.addEventListener('input', function () { autosize(t); });
+              w.appendChild(t); ln.appendChild(w);
+            }
+          });
+          blk.appendChild(ln);
+        });
+        body.appendChild(blk);
+      }
+    });
+    [].forEach.call(body.querySelectorAll('.box'), autosize);
+    var first = body.querySelector('.box, .textbox');
+    if (first) first.focus({ preventScroll: true });
+    window.scrollTo(0, 0);
+    activeMs = 0; tickAt = null; checkAway();
+    var sb = $('q-submit');
+    sb.disabled = false;
+    sb.textContent = S.cur === QUESTIONS.length ? '마지막 문항 제출 ✔' : '제출하고 다음 ▶';
+  }
+
+  function collect() {
+    return [].map.call($('q-body').querySelectorAll('[data-k]'), function (e) { return e.value; });
+  }
+
+  $('q-submit').onclick = function () {
+    if (submitting || away) return;
+    var vals = collect();
+    var empty = vals.some(function (v) { return !v.trim(); });
+    modal('<h2 style="color:var(--ink)">' + S.cur + '번을 제출할까요?</h2><p>제출하면 <b>수정할 수 없고</b> 이전 문항으로 돌아갈 수 없습니다.' +
+      (empty ? '<br><b style="color:var(--bad)">비어 있는 칸이 있습니다.</b>' : '') + '</p>',
+      [{ text: '다시 확인', cls: 'ghost' }, { text: '제출', fn: function () { submitCurrent(vals); } }]);
+  };
+
+  function submitCurrent(vals) {
+    submitting = true; $('q-submit').disabled = true;
+    tickStop();
+    var qn = S.cur;
+    var payload = { id: S.id, q: qn, answer: vals.join('‖'), sec: Math.round(activeMs / 1000) };
+    var tries = 0;
+    (function go() {
+      api('save', payload).then(function () {
+        S.progress = qn;
+        if (qn === QUESTIONS.length) {
+          return api('finish', { id: S.id }).then(function (r) { quizOn = false; S.result = r.result; showResult(r.result); });
+        }
+        S.cur = qn + 1; renderQuestion();
+      }).catch(function (e) {
+        tries++;
+        if (tries < 4) { setTimeout(go, 1500); return; }
+        modal('<h2>제출하지 못했습니다</h2><p>' + esc(e.message) + '<br>인터넷 연결을 확인하고 다시 시도하세요.</p>', [{ text: '다시 시도', fn: function () { submitCurrent(vals); } }], 'bad');
+      }).then(function () { submitting = false; if (quizOn) $('q-submit').disabled = false; });
+    })();
+  }
+
+  /* ---------- 이탈 감지 ---------- */
+  function tickStart() { if (tickAt == null) tickAt = Date.now(); }
+  function tickStop() { if (tickAt != null) { activeMs += Date.now() - tickAt; tickAt = null; } }
+  function isAway() { return document.visibilityState !== 'visible' || !document.hasFocus(); }
+
+  function checkAway() {
+    if (!quizOn) return;
+    if (isAway()) {
+      if (!away) {
+        away = { start: Date.now() };
+        tickStop();
+        S.leaveCount += 1; updateLeaveBox();
+        api('away', { id: S.id, start: away.start }, { keepalive: true }).catch(function () {});
+      }
+    } else if (away) {
+      var rec = away; away = null;
+      var end = Date.now();
+      sendLeave(rec, end);
+      tickStart();
+    } else {
+      tickStart();
+    }
+  }
+
+  function sendLeave(rec, end, attempt) {
+    attempt = attempt || 0;
+    var secs = Math.max(1, Math.round((end - rec.start) / 1000));
+    if (!attempt) showLeaveModal(secs);
+    api('leave', { id: S.id, start: rec.start, end: end, q: S.cur }).then(function (r) {
+      S.leaveCount = r.leaveCount; S.leaveSec = r.leaveSec; updateLeaveBox();
+    }).catch(function () { if (attempt < 5) setTimeout(function () { sendLeave(rec, end, attempt + 1); }, 2000); });
+  }
+
+  function showLeaveModal(secs) {
+    modal('<h2>⚠ 평가 화면을 벗어났습니다</h2><p>이탈 시간 <b>' + fmtSec(secs) + '</b><br>지금까지 <b>' + S.leaveCount + '회</b> · 감점 <b>-' + (S.leaveCount * S.pen) + '점</b></p>' +
+      '<p class="muted" style="font-size:.9rem">벗어난 횟수와 시간은 기록되어 선생님께 보입니다.</p>',
+      [{ text: '확인하고 계속 풀기' }], 'bad');
+  }
+
+  function startQuiz() {
+    quizOn = true;
+    show('s-quiz');
+    renderQuestion();
+    ['visibilitychange', 'blur', 'focus', 'pageshow'].forEach(function (ev) { (ev === 'visibilitychange' ? document : window).addEventListener(ev, checkAway); });
+    setInterval(checkAway, 700);
+    setInterval(function () { if (quizOn && !away) api('ping', { id: S.id }).catch(function () {}); }, 20000);
+    window.addEventListener('beforeunload', function (e) { if (quizOn) { e.preventDefault(); e.returnValue = ''; } });
+    // 붙여넣기 방지는 하지 않음(교사 재량). 우클릭 메뉴만 막아 실수 방지
+  }
+
+  /* ---------- 결과 ---------- */
+  function showResult(r) {
+    quizOn = false;
+    var pen = r.penaltyPerLeave || S.pen;
+    var h = '<div class="card">' +
+      '<div class="muted">' + idLabel(r.id) + ' · 제출 ' + esc(r.end) + '</div>' +
+      '<div class="score"><div class="num">' + r.final + '<small> / 100점</small></div>' +
+      '<div class="muted" style="margin-top:8px">영역별 점수 합계 ' + r.raw + '점' + (r.penalty ? ' − 이탈 감점 ' + r.penalty + '점' : '') + '</div></div>' +
+      '<table class="areas"><tr><th>평가 영역</th><th>문항별 결과</th><th class="r">맞힌 개수</th><th class="r">점수</th></tr>';
+    r.areas.forEach(function (a) {
+      var marks = a.qs.map(function (q) {
+        var p = r.perQ[q - 1];
+        return q + '번 <span class="mark ' + (p.ok ? 'o' : 'x') + '">' + (p.ok ? '○' : '×') + '</span>';
+      }).join(' &nbsp; ');
+      h += '<tr><td>' + esc(a.name) + '</td><td>' + marks + '</td><td class="r">' + a.correct + ' / ' + a.total + '</td><td class="r"><b>' + a.score + '</b> / ' + a.max + '</td></tr>';
+    });
+    h += '</table><div class="kv">' +
+      '<div><b>' + r.leaveCount + '회</b><span>페이지 이탈 (회당 -' + pen + '점)</span></div>' +
+      '<div><b>' + fmtSec(r.leaveSec) + '</b><span>이탈한 시간</span></div>' +
+      '<div><b>' + fmtSec(r.activeSec) + '</b><span>문항 풀이 시간</span></div></div>' +
+      '<h3>내가 제출한 답안</h3>';
+    r.perQ.forEach(function (p) { h += '<div class="ansrow"><b>' + p.q + '번</b> <span class="mark ' + (p.ok ? 'o' : 'x') + '">' + (p.ok ? '○' : '×') + '</span> <span class="muted">' + fmtSec(p.sec) + '</span><code>' + esc(fmtAns(p.answer)) + '</code></div>'; });
+    h += '<div class="actions"><button class="btn" id="pdf-btn">PDF로 저장</button></div>' +
+      '<p class="muted" style="font-size:.85rem;text-align:right">인쇄 창에서 <b>대상(프린터)을 “PDF로 저장”</b>으로 선택하세요.</p></div>';
+    $('s-result').innerHTML = h;
+    $('pdf-btn').onclick = function () { printReport(r); };
+    show('s-result');
+  }
+
+  function fmtAns(a) { return String(a).split('‖').map(function (x, i, arr) { return arr.length > 1 ? (i === 0 ? '(가) ' : '(나) ') + x : x; }).join('\n'); }
+
+  function printReport(r) {
+    var h = '<h1>기계학습을 위한 데이터 탐색과 전처리 수행평가 – 결과</h1>' +
+      '<p>학번 <b>' + esc(r.id) + '</b> &nbsp;·&nbsp; 시작 ' + esc(r.start) + ' &nbsp;·&nbsp; 제출 ' + esc(r.end) + '</p>' +
+      '<p class="rscore">최종 점수 ' + r.final + ' / 100점</p>' +
+      '<p>영역별 점수 합계 ' + r.raw + '점 − 이탈 감점 ' + r.penalty + '점 (이탈 ' + r.leaveCount + '회, 총 ' + fmtSec(r.leaveSec) + ', 회당 -' + (r.penaltyPerLeave || 5) + '점)</p>' +
+      '<table class="pb"><tr><th>평가 영역</th><th>맞힌 개수</th><th>점수</th></tr>' +
+      r.areas.map(function (a) { return '<tr><td>' + esc(a.name) + '</td><td>' + a.correct + ' / ' + a.total + '</td><td>' + a.score + ' / ' + a.max + '</td></tr>'; }).join('') + '</table>' +
+      '<table><tr><th style="width:8%">문항</th><th style="width:8%">정오</th><th style="width:12%">풀이 시간</th><th>제출한 답안</th></tr>' +
+      r.perQ.map(function (p) { return '<tr class="pb"><td>' + p.q + '번</td><td>' + (p.ok ? '○' : '×') + '</td><td>' + fmtSec(p.sec) + '</td><td><code>' + esc(fmtAns(p.answer)) + '</code></td></tr>'; }).join('') + '</table>';
+    $('report').innerHTML = h;
+    var old = document.title;
+    document.title = '수행평가_' + r.id;
+    window.print();
+    setTimeout(function () { document.title = old; }, 500);
+  }
+
+  $('idin').focus();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>교사용 관리 · 수행평가</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="t-login" class="wrap login">
+  <div class="card">
+    <h1>교사용 관리</h1>
+    <p class="muted">수행평가 · 데이터 탐색과 전처리</p>
+    <input id="pw" type="password" class="tinput" style="width:100%;font-size:1.1rem;padding:12px;margin-top:14px" placeholder="비밀번호" autocomplete="current-password">
+    <div id="pw-err" class="err"></div>
+    <button id="pw-btn" class="btn" style="width:100%">로그인</button>
+  </div>
+</div>
+
+<div id="t-main" class="wrap hidden" style="max-width:1200px">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <h1 style="margin:0;font-size:1.4rem">수행평가 관리</h1>
+    <span class="muted" id="t-updated"></span>
+    <button class="btn small ghost" id="t-refresh" style="margin-left:auto">새로고침</button>
+    <button class="btn small ghost" id="t-logout">로그아웃</button>
+  </div>
+
+  <div class="toolbar">
+    <label>반 선택
+      <select id="t-class"></select>
+    </label>
+    <button class="btn small" id="t-monitor">🖥 이탈 모니터 화면 열기</button>
+    <button class="btn small ghost" id="t-csv">CSV 내려받기</button>
+    <span class="muted" id="t-summary"></span>
+  </div>
+
+  <div class="tabs">
+    <button class="tab on" data-tab="scores">점수·현황</button>
+    <button class="tab" data-tab="analysis">문항 분석 (어려움 파악)</button>
+  </div>
+
+  <div id="tab-scores">
+    <div class="scroll"><table class="tbl" id="tbl-scores"></table></div>
+    <p class="muted" style="font-size:.85rem">행을 누르면 학생별 답안·소요 시간·이탈 기록을 보고 정오를 수정할 수 있습니다. 10초마다 자동 갱신됩니다.</p>
+  </div>
+
+  <div id="tab-analysis" class="hidden"></div>
+</div>
+
+<div id="drawer-root"></div>
+
+<script src="config.js"></script>
+<script src="common.js"></script>
+<script src="questions.js"></script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var PW = '', DATA = null, TAB = 'scores', SORT = { k: 'id', dir: 1 }, timer = null, openId = null;
+  var QSHORT = ['pandas 라이브러리 불러오기', 'read_csv 로 파일 읽기', 'head() 처음 5행 출력', 'info() 속성 확인', 'describe() 통계 요약',
+    'countplot 막대그래프', 'dropna 로 NaN 행 삭제', 'unique() 와 이상치 판단 이유', '정규화 fit_transform 적용', 'scatterplot 산점도(hue)',
+    'regplot 회귀선 산점도', 'corr 상관계수 히트맵'];
+
+  /* ---------- 로그인 ---------- */
+  function login(pw) {
+    return api('t_check', { pw: pw }).then(function () {
+      PW = pw; try { sessionStorage.setItem('tpw', pw); } catch (e) {}
+      $('t-login').classList.add('hidden'); $('t-main').classList.remove('hidden');
+      load(); timer = setInterval(function () { if (!openId) load(true); }, 10000);
+    });
+  }
+  $('pw-btn').onclick = function () { login($('pw').value).catch(function (e) { $('pw-err').textContent = e.message; }); };
+  $('pw').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('pw-btn').click(); });
+  $('t-logout').onclick = function () { try { sessionStorage.removeItem('tpw'); } catch (e) {} location.reload(); };
+  try { var saved = sessionStorage.getItem('tpw'); if (saved) login(saved).catch(function () {}); } catch (e) {}
+
+  /* ---------- 데이터 ---------- */
+  function load(silent) {
+    return api('t_list', { pw: PW }).then(function (r) {
+      DATA = r; DATA.skew = r.now - Date.now();
+      refreshClassSelect();
+      $('t-updated').textContent = '마지막 갱신 ' + new Date().toLocaleTimeString('ko-KR');
+      render();
+    }).catch(function (e) { if (!silent) alert(e.message); });
+  }
+  $('t-refresh').onclick = function () { load(); };
+
+  function refreshClassSelect() {
+    var sel = $('t-class'), cur = sel.value || 'all';
+    var cls = {};
+    DATA.students.forEach(function (s) { cls[classOf(s.id)] = 1; });
+    var keys = Object.keys(cls).sort();
+    sel.innerHTML = '<option value="all">전체</option>' + keys.map(function (k) { return '<option value="' + k + '">' + classLabel(k) + '</option>'; }).join('');
+    sel.value = keys.indexOf(cur) >= 0 || cur === 'all' ? cur : 'all';
+  }
+  $('t-class').onchange = render;
+
+  function rows() {
+    var c = $('t-class').value;
+    return DATA.students.filter(function (s) { return c === 'all' || classOf(s.id) === c; });
+  }
+
+  document.querySelectorAll('.tab').forEach(function (b) {
+    b.onclick = function () {
+      TAB = b.dataset.tab;
+      document.querySelectorAll('.tab').forEach(function (x) { x.classList.toggle('on', x === b); });
+      render();
+    };
+  });
+
+  function render() {
+    if (!DATA) return;
+    var rs = rows();
+    var done = rs.filter(function (s) { return s.status === '제출'; });
+    $('t-summary').textContent = '학생 ' + rs.length + '명 · 제출 ' + done.length + '명 · 진행 중 ' + (rs.length - done.length) + '명';
+    $('tab-scores').classList.toggle('hidden', TAB !== 'scores');
+    $('tab-analysis').classList.toggle('hidden', TAB !== 'analysis');
+    if (TAB === 'scores') renderScores(rs); else renderAnalysis(rs);
+  }
+
+  /* ---------- 점수·현황 ---------- */
+  var COLS = [
+    ['id', '학번'], ['status', '상태'], ['progress', '진행'], ['a0', '문제정의·수집<br>(20)'], ['a1', '탐색적 분석<br>(25)'], ['a2', '전처리<br>(30)'],
+    ['a3', '핵심 속성<br>(25)'], ['raw', '감점 전'], ['penalty', '감점'], ['final', '최종 점수'], ['leaveCount', '이탈 횟수'], ['leaveSec', '이탈 시간'], ['sec', '풀이 시간']
+  ];
+  function val(s, k) {
+    if (k[0] === 'a' && k.length === 2) return s.areas[Number(k[1])];
+    if (k === 'sec') return s.sec.reduce(function (a, b) { return a + b; }, 0);
+    return s[k];
+  }
+  function renderScores(rs) {
+    rs = rs.slice().sort(function (a, b) {
+      var x = val(a, SORT.k), y = val(b, SORT.k);
+      if (x == null) x = -1; if (y == null) y = -1;
+      return (x < y ? -1 : x > y ? 1 : 0) * SORT.dir;
+    });
+    var h = '<tr>' + COLS.map(function (c) { return '<th data-k="' + c[0] + '">' + c[1] + (SORT.k === c[0] ? (SORT.dir > 0 ? ' ▲' : ' ▼') : '') + '</th>'; }).join('') + '</tr>';
+    rs.forEach(function (s) {
+      var fin = s.status === '제출';
+      var awayNow = s.away != null;
+      h += '<tr class="clickable" data-id="' + s.id + '"><td>' + s.id + (s.demo ? ' <span class="muted" style="font-size:.7rem">예시</span>' : '') + '</td>' +
+        '<td>' + (fin ? '<span class="pill done">제출</span>' : awayNow ? '<span class="pill hot">이탈 중</span>' : '<span class="pill run">진행 중</span>') + '</td>' +
+        '<td>' + s.progress + ' / 12</td>' +
+        [0, 1, 2, 3].map(function (i) { return '<td>' + (fin ? s.areas[i] : '–') + '</td>'; }).join('') +
+        '<td>' + (fin ? s.raw : '–') + '</td><td>' + (s.penalty ? '−' + s.penalty : (fin ? '0' : '–')) + '</td>' +
+        '<td><b>' + (fin ? s.final : '–') + '</b></td>' +
+        '<td>' + (s.leaveCount ? '<span class="pill hot">' + s.leaveCount + '회</span>' : '0회') + '</td>' +
+        '<td>' + fmtSec(s.leaveSec) + '</td><td>' + fmtSec(val(s, 'sec')) + '</td></tr>';
+    });
+    if (!rs.length) h += '<tr><td colspan="' + COLS.length + '" style="text-align:center;padding:30px" class="muted">아직 입장한 학생이 없습니다.</td></tr>';
+    var t = $('tbl-scores');
+    t.innerHTML = h;
+    t.querySelectorAll('th').forEach(function (th) {
+      th.onclick = function () { var k = th.dataset.k; SORT = { k: k, dir: SORT.k === k ? -SORT.dir : 1 }; render(); };
+    });
+    t.querySelectorAll('tr.clickable').forEach(function (tr) { tr.onclick = function () { openDetail(tr.dataset.id); }; });
+  }
+
+  /* ---------- 문항 분석 ---------- */
+  function renderAnalysis(rs) {
+    var st = [];
+    for (var q = 0; q < 12; q++) {
+      var n = 0, ok = 0, tm = 0;
+      rs.forEach(function (s) { if (s.progress > q) { n++; if (s.ok[q] === 'O') ok++; tm += s.sec[q]; } });
+      st.push({ q: q, n: n, rate: n ? ok / n : null, avg: n ? tm / n : 0 });
+    }
+    var valid = st.filter(function (x) { return x.n > 0; });
+    var maxT = Math.max.apply(null, valid.map(function (x) { return x.avg; }).concat([1]));
+    valid.forEach(function (x) { x.hard = (1 - x.rate) * 0.7 + (x.avg / maxT) * 0.3; });
+    var rank = valid.slice().sort(function (a, b) { return b.hard - a.hard; }).slice(0, 3);
+    var h = '';
+    if (!valid.length) { $('tab-analysis').innerHTML = '<p class="muted">제출된 답안이 아직 없습니다.</p>'; return; }
+    h += '<div class="insight"><b>가장 어려움이 컸던 문항 (정답률이 낮고 오래 걸린 순)</b><ol style="margin:8px 0 0;padding-left:20px">' +
+      rank.map(function (x) { return '<li><b>' + (x.q + 1) + '번</b> ' + QSHORT[x.q] + ' — 정답률 ' + Math.round(x.rate * 100) + '%, 평균 ' + fmtSec(x.avg) + ' <span class="muted">(' + AREA_NAMES[QUESTIONS[x.q].area] + ')</span></li>'; }).join('') + '</ol></div>';
+
+    h += '<h3>영역별 요약</h3><div class="scroll"><table class="tbl"><tr><th>평가 영역</th><th>평균 정답률</th><th>정답률</th><th>평균 풀이 시간(문항당)</th></tr>';
+    AREA_NAMES.forEach(function (nm, a) {
+      var xs = valid.filter(function (x) { return QUESTIONS[x.q].area === a; });
+      if (!xs.length) return;
+      var rate = xs.reduce(function (s, x) { return s + x.rate; }, 0) / xs.length;
+      var avg = xs.reduce(function (s, x) { return s + x.avg; }, 0) / xs.length;
+      h += '<tr><td>' + nm + '</td><td>' + Math.round(rate * 100) + '%</td><td>' + bar(rate) + '</td><td>' + fmtSec(avg) + '</td></tr>';
+    });
+    h += '</table></div><h3 style="margin-top:20px">문항별 정답률과 평균 풀이 시간</h3><div class="scroll"><div style="min-width:560px;background:var(--card)">';
+    st.forEach(function (x) {
+      if (!x.n) { h += '<div class="qcard"><b>' + (x.q + 1) + '번</b><span class="muted">응답 없음</span><span></span><span></span></div>'; return; }
+      h += '<div class="qcard"><div><b>' + (x.q + 1) + '번</b><br><span class="muted" style="font-size:.78rem">' + QSHORT[x.q] + '</span></div>' + bar(x.rate) +
+        '<b style="text-align:right">' + Math.round(x.rate * 100) + '%</b><span class="muted" style="text-align:right">' + fmtSec(x.avg) + '</span></div>';
+    });
+    h += '</div></div><p class="muted" style="font-size:.85rem">어려움 지수 = 오답 비율 70% + 평균 풀이 시간 30% (이탈 시간은 제외). 풀이 시간은 화면을 보고 있던 시간만 측정합니다.</p>';
+    $('tab-analysis').innerHTML = h;
+  }
+  function bar(rate) {
+    var c = rate >= .75 ? 'good' : rate >= .5 ? 'mid' : 'bad';
+    return '<div class="bar ' + c + '"><i style="width:' + Math.round(rate * 100) + '%"></i></div>';
+  }
+
+  /* ---------- 학생 상세 ---------- */
+  function openDetail(id) {
+    openId = id;
+    api('t_detail', { pw: PW, id: id }).then(function (r) { drawDetail(r.detail); })
+      .catch(function (e) { alert(e.message); openId = null; });
+  }
+  function closeDetail() { openId = null; $('drawer-root').innerHTML = ''; load(true); }
+
+  function drawDetail(d) {
+    var fin = d.status === '제출';
+    var h = '<div class="drawer-bg" id="dbg"><div class="drawer">' +
+      '<div style="display:flex;align-items:center;gap:10px"><h2 style="margin:0">' + idLabel(d.id) + '</h2><button class="btn small ghost" id="dclose" style="margin-left:auto">닫기 ✕</button></div>' +
+      (fin ? '<div class="score" style="text-align:left"><div class="num">' + d.final + '<small> / 100점</small></div><div class="muted">영역 합계 ' + d.raw + ' − 감점 ' + d.penalty + '</div></div>' :
+        '<p><span class="pill run">진행 중</span> ' + d.progress + '문항 제출</p>') +
+      '<table class="areas"><tr><th>영역</th><th class="r">맞힌 개수</th><th class="r">점수</th></tr>' +
+      d.areas.map(function (a) { return '<tr><td>' + esc(a.name) + '</td><td class="r">' + a.correct + '/' + a.total + '</td><td class="r">' + (fin ? a.score : '–') + '</td></tr>'; }).join('') + '</table>' +
+      '<div class="kv"><div><b>' + d.leaveCount + '회</b><span>이탈</span></div><div><b>' + fmtSec(d.leaveSec) + '</b><span>이탈 시간</span></div><div><b>' + fmtSec(d.activeSec) + '</b><span>풀이 시간</span></div></div>';
+
+    var slow = d.perQ.filter(function (p) { return p.q <= d.progress; }).slice().sort(function (a, b) { return b.sec - a.sec; })[0];
+    var wrong = d.perQ.filter(function (p) { return p.q <= d.progress && !p.ok; }).map(function (p) { return p.q + '번'; });
+    h += '<div class="insight" style="margin:6px 0 14px"><b>어려움 분석</b><br>오답: ' + (wrong.length ? wrong.join(', ') : '없음') +
+      (slow ? '<br>가장 오래 걸린 문항: <b>' + slow.q + '번</b> (' + fmtSec(slow.sec) + ')' : '') + '</div>';
+
+    h += '<h3>문항별 답안 (정오 수정 가능)</h3>';
+    d.perQ.forEach(function (p) {
+      if (p.q > d.progress) { h += '<div class="ansrow muted"><b>' + p.q + '번</b> 미제출</div>'; return; }
+      var parts = String(p.answer).split('‖');
+      h += '<div class="ansrow"><b>' + p.q + '번</b> <span class="mark ' + (p.ok ? 'o' : 'x') + '">' + (p.ok ? '○' : '×') + '</span> ' +
+        (d.manual[p.q] ? '<span class="pill run">수동수정</span> ' : '') + '<span class="muted">' + fmtSec(p.sec) + '</span> ' +
+        '<button class="btn small ghost ov" data-q="' + p.q + '" data-ok="' + (p.ok ? 0 : 1) + '" style="float:right">' + (p.ok ? '오답으로 수정' : '정답으로 수정') + '</button>' +
+        '<code>' + parts.map(function (x, i) { return (parts.length > 1 ? (i ? '(나) ' : '(가) ') : '') + esc(x); }).join('\n') + '</code>' +
+        '<div class="muted" style="font-size:.78rem;margin-top:2px">모범 답안: ' + esc(String(d.key[p.q]).split('‖').join('  /  ')) + '</div></div>';
+    });
+
+    h += '<h3 style="margin-top:20px">이탈 기록</h3>';
+    if (!d.logs.length) h += '<p class="muted">이탈 기록이 없습니다.</p>';
+    else h += '<table class="areas"><tr><th>회차</th><th>문항</th><th>벗어난 시각</th><th>복귀</th><th class="r">시간</th></tr>' +
+      d.logs.map(function (l) { return '<tr><td>' + l.n + '회</td><td>' + l.q + '번</td><td>' + esc(l.from.slice(11)) + '</td><td>' + esc(l.to.slice(11)) + '</td><td class="r">' + fmtSec(l.sec) + '</td></tr>'; }).join('') + '</table>';
+    h += '<div style="margin-top:24px"><button class="btn small danger" id="dreset">이 학생 기록 삭제 (재응시 허용)</button></div></div></div>';
+    $('drawer-root').innerHTML = h;
+    $('dclose').onclick = closeDetail;
+    $('dbg').onclick = function (e) { if (e.target.id === 'dbg') closeDetail(); };
+    document.querySelectorAll('.ov').forEach(function (b) {
+      b.onclick = function () {
+        api('t_override', { pw: PW, id: d.id, q: Number(b.dataset.q), ok: b.dataset.ok === '1' }).then(function () { openDetail(d.id); }).catch(function (e) { alert(e.message); });
+      };
+    });
+    $('dreset').onclick = function () {
+      if (!confirm(d.id + ' 학생의 모든 기록(답안·이탈·점수)이 삭제됩니다. 되돌릴 수 없습니다. 계속할까요?')) return;
+      api('t_reset', { pw: PW, id: d.id }).then(function () { closeDetail(); });
+    };
+  }
+
+  /* ---------- 이탈 모니터 / CSV ---------- */
+  $('t-monitor').onclick = function () {
+    var c = $('t-class').value;
+    if (c === 'all') { alert('이탈 모니터에 띄울 반을 먼저 선택하세요.'); return; }
+    window.open('monitor.html?class=' + c, 'monitor_' + c, 'width=1280,height=800');
+  };
+
+  $('t-csv').onclick = function () {
+    var rs = rows().slice().sort(function (a, b) { return a.id < b.id ? -1 : 1; });
+    var head = ['학번', '상태', '제출문항수', '문제정의·수집', '탐색적분석', '데이터전처리', '핵심속성', '감점전합계', '이탈감점', '최종점수', '이탈횟수', '이탈시간(초)', '풀이시간(초)'];
+    for (var q = 1; q <= 12; q++) head.push(q + '번 정오');
+    for (q = 1; q <= 12; q++) head.push(q + '번 시간(초)');
+    var out = [head];
+    rs.forEach(function (s) {
+      out.push([s.id, s.status, s.progress].concat(s.areas.map(function (v) { return v == null ? '' : v; }),
+        [s.raw == null ? '' : s.raw, s.penalty, s.final == null ? '' : s.final, s.leaveCount, s.leaveSec, val(s, 'sec')],
+        s.ok.map(function (v) { return v; }), s.sec));
+    });
+    var csv = '﻿' + out.map(function (r) { return r.map(function (c) { c = String(c); return /[",\n]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c; }).join(','); }).join('\r\n');
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = '수행평가_성적_' + ($('t-class').value === 'all' ? '전체' : $('t-class').value + '반') + '.csv';
+    a.click();
+  };
+})();
+</script>
+</body>
+</html>
