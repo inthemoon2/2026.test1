@@ -243,8 +243,13 @@
 
     h += '<h3 style="margin-top:20px">이탈 기록</h3>';
     if (!d.logs.length) h += '<p class="muted">이탈 기록이 없습니다.</p>';
-    else h += '<table class="areas"><tr><th>회차</th><th>문항</th><th>벗어난 시각</th><th>복귀</th><th class="r">시간</th></tr>' +
-      d.logs.map(function (l) { return '<tr><td>' + l.n + '회</td><td>' + l.q + '번</td><td>' + esc(l.from.slice(11)) + '</td><td>' + esc(l.to.slice(11)) + '</td><td class="r">' + fmtSec(l.sec) + '</td></tr>'; }).join('') + '</table>';
+    else h += '<table class="areas"><tr><th>회차</th><th>문항</th><th>벗어난 시각</th><th>복귀</th><th class="r">시간</th><th></th></tr>' +
+      d.logs.map(function (l) {
+        var c = l.note === '교사 취소';
+        return '<tr' + (c ? ' style="opacity:.55;text-decoration:line-through"' : '') + '><td>' + l.n + '회</td><td>' + l.q + '번</td><td>' + esc(l.from.slice(11)) + '</td><td>' + esc(l.to.slice(11)) + '</td><td class="r">' + fmtSec(l.sec) + '</td><td>' +
+          (c ? '<span class="pill done">취소됨</span>' : '<button class="btn small ghost lc" data-n="' + l.n + '">이 이탈 취소</button>') + '</td></tr>';
+      }).join('') + '</table>';
+    if (d.leaveCount > 0) h += '<div style="margin-top:10px"><button class="btn small" id="dleaveall">이탈 전체 초기화 (감점 0점으로)</button></div>';
     h += '<div style="margin-top:24px"><button class="btn small danger" id="dreset">이 학생 기록 삭제 (재응시 허용)</button></div></div></div>';
     $('drawer-root').innerHTML = h;
     $('dclose').onclick = closeDetail;
@@ -254,6 +259,16 @@
         api('t_override', { pw: PW, id: d.id, q: Number(b.dataset.q), ok: b.dataset.ok === '1' }).then(function () { openDetail(d.id); }).catch(function (e) { alert(e.message); });
       };
     });
+    function cancelLeave(n) {
+      var msg = n == null ? d.id + ' 학생의 이탈 기록 전체를 취소하고 이탈 횟수·시간·감점을 0으로 되돌립니다. 계속할까요?'
+        : d.id + ' 학생의 ' + n + '회차 이탈을 취소합니다(횟수 -1, 감점 ' + d.penaltyPerLeave + '점 복구). 계속할까요?';
+      if (!confirm(msg)) return;
+      var req = { pw: PW, id: d.id };
+      if (n != null) req.n = n;
+      api('t_leave_cancel', req).then(function () { openDetail(d.id); }).catch(function (e) { alert(e.message); });
+    }
+    document.querySelectorAll('.lc').forEach(function (b) { b.onclick = function () { cancelLeave(Number(b.dataset.n)); }; });
+    if ($('dleaveall')) $('dleaveall').onclick = function () { cancelLeave(null); };
     $('dreset').onclick = function () {
       if (!confirm(d.id + ' 학생의 모든 기록(답안·이탈·점수)이 삭제됩니다. 되돌릴 수 없습니다. 계속할까요?')) return;
       api('t_reset', { pw: PW, id: d.id }).then(function () { closeDetail(); });
