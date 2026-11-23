@@ -37,7 +37,12 @@ button { font-family: inherit; font-size: 1rem; cursor: pointer; }
 .topbar { position: sticky; top: 0; z-index: 20; background: var(--card); border-bottom: 1px solid var(--line); }
 .topbar .row { max-width: 880px; margin: 0 auto; padding: 10px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .topbar .id { font-weight: 800; }
-.leavebox { margin-left: auto; padding: 6px 12px; border-radius: 999px; font-weight: 700; font-size: .92rem; background: var(--ok-soft); color: var(--ok); }
+.timer { margin-left: auto; padding: 6px 14px; border-radius: 999px; font-weight: 800; font-size: .95rem; background: var(--brand-soft); color: var(--brand); font-variant-numeric: tabular-nums; }
+.timer.warn { background: var(--warn-soft); color: var(--warn); }
+.timer.crit { background: var(--bad); color: #fff; animation: tpulse 1s infinite; }
+@keyframes tpulse { 50% { opacity: .55; } }
+.timeup-banner { background: var(--warn-soft); border: 2px solid var(--warn); border-radius: var(--radius); padding: 10px 16px; margin-bottom: 12px; font-weight: 700; }
+.leavebox { margin-left: 0; padding: 6px 12px; border-radius: 999px; font-weight: 700; font-size: .92rem; background: var(--ok-soft); color: var(--ok); }
 .leavebox.hit { background: var(--bad-soft); color: var(--bad); }
 .warnstrip { background: var(--bad); color: #fff; text-align: center; padding: 6px 12px; font-weight: 700; font-size: .9rem; }
 .progress { display: flex; gap: 4px; max-width: 880px; margin: 0 auto; padding: 0 16px 10px; }

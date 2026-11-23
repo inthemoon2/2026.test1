@@ -57,9 +57,10 @@
 (function () {
   var $ = function (id) { return document.getElementById(id); };
   var PW = '', DATA = null, TAB = 'scores', SORT = { k: 'id', dir: 1 }, timer = null, openId = null;
-  var QSHORT = ['pandas 라이브러리 불러오기', 'read_csv 로 파일 읽기', 'head() 처음 5행 출력', 'info() 속성 확인', 'describe() 통계 요약',
-    'countplot 막대그래프', 'dropna 로 NaN 행 삭제', 'unique() 와 이상치 판단 이유', '정규화 fit_transform 적용', 'scatterplot 산점도(hue)',
-    'regplot 회귀선 산점도', 'corr 상관계수 히트맵'];
+  // 이 파일은 공개되므로 코드(함수 이름)가 아닌 주제만 적습니다. 문항별 모범 답안은 로그인 후 서버에서 받아옵니다.
+  var QSHORT = ['라이브러리 불러오기', '파일 읽어 데이터 프레임 만들기', '처음 5행 출력', '속성 정보 확인', '통계 요약',
+    '종별 개수 막대그래프', 'NaN 행 삭제', '고유값 확인과 이상치 판단 이유', '정규화 적용', '종별 색 구분 산점도',
+    '회귀선 산점도', '상관계수 히트맵'];
 
   /* ---------- 로그인 ---------- */
   function login(pw) {
@@ -78,6 +79,12 @@
   function load(silent) {
     return api('t_list', { pw: PW }).then(function (r) {
       DATA = r; DATA.skew = r.now - Date.now();
+      // 시험 시간(30분)이 끝났는데 제출하지 못한 학생이 있으면 자동 제출 처리 후 다시 불러옴
+      var expired = r.students.some(function (s) { return s.status !== '제출' && s.quizStart != null && r.now > s.quizStart + (r.examSec + 15) * 1000; });
+      if (expired && !load.busy) {
+        load.busy = true;
+        return api('t_finalize', { pw: PW }).catch(function () {}).then(function () { load.busy = false; return load(true); });
+      }
       refreshClassSelect();
       $('t-updated').textContent = '마지막 갱신 ' + new Date().toLocaleTimeString('ko-KR');
       render();
@@ -121,12 +128,17 @@
   /* ---------- 점수·현황 ---------- */
   var COLS = [
     ['id', '학번'], ['status', '상태'], ['progress', '진행'], ['a0', '문제정의·수집<br>(20)'], ['a1', '탐색적 분석<br>(25)'], ['a2', '전처리<br>(30)'],
-    ['a3', '핵심 속성<br>(25)'], ['raw', '감점 전'], ['penalty', '감점'], ['final', '최종 점수'], ['leaveCount', '이탈 횟수'], ['leaveSec', '이탈 시간'], ['sec', '풀이 시간']
+    ['a3', '핵심 속성<br>(25)'], ['raw', '감점 전'], ['penalty', '감점'], ['final', '최종 점수'], ['leaveCount', '이탈 횟수'], ['leaveSec', '이탈 시간'], ['sec', '풀이 시간'], ['used', '시험 시간<br>(30분)']
   ];
   function val(s, k) {
     if (k[0] === 'a' && k.length === 2) return s.areas[Number(k[1])];
     if (k === 'sec') return s.sec.reduce(function (a, b) { return a + b; }, 0);
     return s[k];
+  }
+  // 진행 중인 학생의 남은 시험 시간(초). 시작 전이면 null
+  function remain(s) {
+    if (s.status === '제출' || s.quizStart == null) return null;
+    return Math.max(0, Math.round((s.quizStart + DATA.examSec * 1000 - (Date.now() + DATA.skew)) / 1000));
   }
   function renderScores(rs) {
     rs = rs.slice().sort(function (a, b) {
@@ -139,13 +151,13 @@
       var fin = s.status === '제출';
       var awayNow = s.away != null;
       h += '<tr class="clickable" data-id="' + s.id + '"><td>' + s.id + (s.demo ? ' <span class="muted" style="font-size:.7rem">예시</span>' : '') + '</td>' +
-        '<td>' + (fin ? '<span class="pill done">제출</span>' : awayNow ? '<span class="pill hot">이탈 중</span>' : '<span class="pill run">진행 중</span>') + '</td>' +
-        '<td>' + s.progress + ' / 12</td>' +
+        '<td>' + (fin ? '<span class="pill done">제출</span>' + (s.timeup ? ' <span class="pill hot">시간종료</span>' : '') : awayNow ? '<span class="pill hot">이탈 중</span>' : '<span class="pill run">진행 중</span>') + '</td>' +
+        '<td>' + s.progress + ' / 12' + (remain(s) != null ? ' <span class="muted" style="font-size:.78rem">· ' + fmtClock(remain(s)) + ' 남음</span>' : '') + '</td>' +
         [0, 1, 2, 3].map(function (i) { return '<td>' + (fin ? s.areas[i] : '–') + '</td>'; }).join('') +
         '<td>' + (fin ? s.raw : '–') + '</td><td>' + (s.penalty ? '−' + s.penalty : (fin ? '0' : '–')) + '</td>' +
         '<td><b>' + (fin ? s.final : '–') + '</b></td>' +
         '<td>' + (s.leaveCount ? '<span class="pill hot">' + s.leaveCount + '회</span>' : '0회') + '</td>' +
-        '<td>' + fmtSec(s.leaveSec) + '</td><td>' + fmtSec(val(s, 'sec')) + '</td></tr>';
+        '<td>' + fmtSec(s.leaveSec) + '</td><td>' + fmtSec(val(s, 'sec')) + '</td><td>' + (s.used != null ? fmtSec(s.used) : '–') + '</td></tr>';
     });
     if (!rs.length) h += '<tr><td colspan="' + COLS.length + '" style="text-align:center;padding:30px" class="muted">아직 입장한 학생이 없습니다.</td></tr>';
     var t = $('tbl-scores');
@@ -257,13 +269,13 @@
 
   $('t-csv').onclick = function () {
     var rs = rows().slice().sort(function (a, b) { return a.id < b.id ? -1 : 1; });
-    var head = ['학번', '상태', '제출문항수', '문제정의·수집', '탐색적분석', '데이터전처리', '핵심속성', '감점전합계', '이탈감점', '최종점수', '이탈횟수', '이탈시간(초)', '풀이시간(초)'];
+    var head = ['학번', '상태', '제출문항수', '문제정의·수집', '탐색적분석', '데이터전처리', '핵심속성', '감점전합계', '이탈감점', '최종점수', '이탈횟수', '이탈시간(초)', '풀이시간(초)', '시험시간(초)', '시간종료'];
     for (var q = 1; q <= 12; q++) head.push(q + '번 정오');
     for (q = 1; q <= 12; q++) head.push(q + '번 시간(초)');
     var out = [head];
     rs.forEach(function (s) {
       out.push([s.id, s.status, s.progress].concat(s.areas.map(function (v) { return v == null ? '' : v; }),
-        [s.raw == null ? '' : s.raw, s.penalty, s.final == null ? '' : s.final, s.leaveCount, s.leaveSec, val(s, 'sec')],
+        [s.raw == null ? '' : s.raw, s.penalty, s.final == null ? '' : s.final, s.leaveCount, s.leaveSec, val(s, 'sec'), s.used == null ? '' : s.used, s.timeup ? 'Y' : ''],
         s.ok.map(function (v) { return v; }), s.sec));
     });
     var csv = '﻿' + out.map(function (r) { return r.map(function (c) { c = String(c); return /[",\n]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c; }).join(','); }).join('\r\n');
