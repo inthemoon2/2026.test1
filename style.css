@@ -167,6 +167,16 @@ body.monitor { background: #0b1118; color: #e8eef5; }
   .report .rscore { font-size: 22pt; font-weight: 800; }
   .report code { font-family: Consolas, monospace; white-space: pre-wrap; word-break: break-all; }
   .report .pb { page-break-inside: avoid; }
+  .report .pq { border: 1px solid #888; border-radius: 4pt; padding: 6pt 8pt; margin: 0 0 8pt; }
+  .report .pqh { font-size: 11pt; margin-bottom: 3pt; }
+  .report .pqm { font-weight: 800; margin-left: 6pt; }
+  .report .pqt { color: #555; font-size: 9pt; margin-left: 6pt; }
+  .report .pqp { margin: 3pt 0; font-size: 10pt; }
+  .report pre { font-family: Consolas, monospace; font-size: 9.5pt; background: #f3f3f3; padding: 4pt 6pt; margin: 3pt 0; white-space: pre-wrap; word-break: break-all; }
+  .report .pqans { font-weight: 700; color: #0a3d91; text-decoration: underline; }
+  .report .pqtb { border: 1px dashed #0a3d91; padding: 4pt 6pt; margin: 3pt 0; color: #0a3d91; font-weight: 700; white-space: pre-wrap; }
+  .report .pqfig { max-width: 70%; margin: 3pt 0; }
+  .report .pqfig svg, .report .pqfig img { max-width: 100%; height: auto; }
 }
 @media (max-width: 560px) {
   .qcard { grid-template-columns: 1fr 1fr; }

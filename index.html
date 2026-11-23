@@ -370,6 +370,35 @@
 
   function fmtAns(a) { return String(a).split('‖').map(function (x, i, arr) { return arr.length > 1 ? (i === 0 ? '(가) ' : '(나) ') + x : x; }).join('\n'); }
 
+  /* PDF용: 문제 + 코드(내 답을 네모칸에 채워 표시) + 그림 + 정오 */
+  function printQuestion(p) {
+    var q = QUESTIONS[p.q - 1];
+    var parts = String(p.answer).split('‖');
+    var keyIdx = { a: 0, b: 1 };
+    var noAns = !String(p.answer).replace(/‖/g, '').trim();
+    var h = '<div class="pq pb"><div class="pqh"><b>' + p.q + '번</b> <span class="pqm">' + (p.ok ? '○ 정답' : '× 오답') +
+      '</span> <span class="pqt">풀이 시간 ' + fmtSec(p.sec) + '</span></div>';
+    q.blocks.forEach(function (b) {
+      if (b.p) h += '<p class="pqp">' + b.p + '</p>';
+      else if (b.fig) h += '<div class="pqfig">' + FIGURES[b.fig]() + '</div>';
+      else if (b.out) h += '<pre class="pqout">' + esc(b.out) + '</pre>';
+      else if (b.code) {
+        h += '<pre class="pqcode">' + b.code.map(function (line) {
+          return line.map(function (c) {
+            if (typeof c === 'string') return esc(c);
+            if (c.b) { var v = parts[keyIdx[c.b] || 0]; return '<u class="pqans">' + (v && v.trim() ? esc(v) : '(미작성)') + '</u>'; }
+            return '';
+          }).join('');
+        }).join('\n') + '</pre>';
+      } else if (b.tb) {
+        var t = parts[keyIdx[b.tb] || 0];
+        h += '<div class="pqtb">' + (t && t.trim() ? esc(t) : '(미작성)') + '</div>';
+      }
+    });
+    if (noAns) h += '<div class="muted">(제출한 답이 없습니다)</div>';
+    return h + '</div>';
+  }
+
   function printReport(r) {
     var h = '<h1>기계학습을 위한 데이터 탐색과 전처리 수행평가 – 결과</h1>' +
       '<p>학번 <b>' + esc(r.id) + '</b> &nbsp;·&nbsp; 시작 ' + esc(r.start) + ' &nbsp;·&nbsp; 제출 ' + esc(r.end) + '</p>' +
@@ -378,8 +407,8 @@
       (r.usedSec != null ? '<p>시험 시간 ' + fmtSec(r.usedSec) + ' / ' + Math.round((r.examSec || 1800) / 60) + '분' + (r.timeup ? ' (시간 종료로 자동 제출)' : '') + '</p>' : '') +
       '<table class="pb"><tr><th>평가 영역</th><th>맞힌 개수</th><th>점수</th></tr>' +
       r.areas.map(function (a) { return '<tr><td>' + esc(a.name) + '</td><td>' + a.correct + ' / ' + a.total + '</td><td>' + a.score + ' / ' + a.max + '</td></tr>'; }).join('') + '</table>' +
-      '<table><tr><th style="width:8%">문항</th><th style="width:8%">정오</th><th style="width:12%">풀이 시간</th><th>제출한 답안</th></tr>' +
-      r.perQ.map(function (p) { return '<tr class="pb"><td>' + p.q + '번</td><td>' + (p.ok ? '○' : '×') + '</td><td>' + fmtSec(p.sec) + '</td><td><code>' + esc(fmtAns(p.answer)) + '</code></td></tr>'; }).join('') + '</table>';
+      '<h2 style="font-size:13pt;margin:14pt 0 4pt">문항별 문제와 내가 쓴 답</h2>' +
+      r.perQ.map(function (p) { return printQuestion(p); }).join('');
     $('report').innerHTML = h;
     var old = document.title;
     document.title = '수행평가_' + r.id;
