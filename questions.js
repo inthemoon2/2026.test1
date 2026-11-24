@@ -51,8 +51,8 @@
     { out: "array(['MALE', 'FEMALE', '.'], dtype=object)" },
     { p: '(가) 고유한 값의 종류를 출력하는 코드를 완성하시오.' },
     { code: [["df['sex'].", { b: 'a' }]] },
-    { p: '(나) 위 결과에서 <code>\'.\'</code>을 이상치라고 판단한 <b>이유</b>를 쓰시오.' },
-    { tb: 'b', label: '이유를 문장으로 쓰세요.' }
+    { p: '(나) <code>sex</code>는 성별을 나타내는 속성이다. 위 결과에서 <code>\'.\'</code>을 <b>이상치</b>(잘못된 값)라고 보는 이유를 한 문장으로 쓰시오.' },
+    { tb: 'b', label: '이유를 한 문장으로 쓰세요.' }
   ]);
   add(9, 2, 4, [
     { p: '최소-최대 정규화 객체 <code>scaler</code>가 이미 만들어져 있다. 부리 길이·부리 깊이·날개 길이·체질량 4개 속성을 정규화하여 <b>같은 열에 다시 저장</b>한다. 등호(<code>=</code>) <b>오른쪽</b>을 쓰시오.' },
@@ -61,9 +61,9 @@
 
   // ---------- 영역 4 ----------
   add(10, 3, 3, [
-    { p: '시각화 라이브러리는 <code>sns</code>로 불러와 있다. 부리 길이(x: <code>culmen_length_mm</code>)와 부리 깊이(y: <code>culmen_depth_mm</code>)의 산점도를 그리되, <b>종(<code>species</code>)에 따라 점의 색을 구분</b>한다. 데이터는 <code>df</code>를 사용한다. 아래 그림이 실행 결과이다.' },
+    { p: '시각화 라이브러리는 <code>sns</code>로 불러와 있다. 부리 길이와 부리 깊이의 산점도를 그리는 코드이다. 아래 그림처럼 <b>펭귄 종(<code>species</code>)에 따라 점의 색을 구분</b>하도록 네모칸을 채우시오.' },
     { fig: 'scatterSpecies' },
-    { code: [['sns.', { b: 'a' }, ", hue='species')"]] }
+    { code: [["sns.scatterplot(x='culmen_length_mm', y='culmen_depth_mm', data=df, ", { b: 'a' }, ')']] }
   ]);
   add(11, 3, 4, [
     { p: '부리 길이(x: <code>culmen_length_mm</code>)와 체질량(y: <code>body_mass_g</code>)의 산점도에 <b>회귀선을 함께</b> 그리고, 색은 <code>\'green\'</code>으로 한다. 데이터는 <code>df</code>를 사용한다. 아래 그림이 실행 결과이다.' },
