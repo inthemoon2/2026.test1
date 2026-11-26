@@ -253,6 +253,8 @@
     h += '<div class="insight" style="margin:6px 0 14px"><b>시험 시간 조정</b> (이 학생만): 개별 연장 ' + (d.extra / 60) + '분 · 전체 연장 ' + (d.globalExtra / 60) + '분 ' +
       '<button class="btn small ghost" id="dext">이 학생 연장 설정</button>' +
       (d.timeup ? ' <button class="btn small" id="dreopen">시험 재개 (시간종료로 제출된 답 이어서 풀기)</button>' : '') + '</div>';
+    h += '<div class="insight" style="margin:6px 0 14px"><b>비밀번호</b>: ' + (d.hasPw ? '설정됨' : '아직 만들지 않음') +
+      (d.hasPw ? ' <button class="btn small ghost" id="dpwreset">비밀번호 초기화</button>' : '') + '</div>';
     h += '<h3 style="margin-top:20px">이탈 기록</h3>';
     if (!d.logs.length) h += '<p class="muted">이탈 기록이 없습니다.</p>';
     else h += '<table class="areas"><tr><th>회차</th><th>문항</th><th>벗어난 시각</th><th>복귀</th><th class="r">시간</th><th></th></tr>' +
@@ -289,6 +291,10 @@
       var sec = parseMin(v);
       if (sec === null || sec <= 0) return;
       api('t_reopen', { pw: PW, id: d.id, min: sec / 60 }).then(function (r) { alert('재개되었습니다. 남은 시간 ' + Math.floor(r.remainSec / 60) + '분. 학생은 새로고침 후 다시 로그인하세요.'); openDetail(d.id); }).catch(function (e) { alert(e.message); });
+    };
+    if ($('dpwreset')) $('dpwreset').onclick = function () {
+      if (!confirm(d.id + ' 학생의 비밀번호를 초기화합니다. 학생은 비밀번호 칸을 비운 채 로그인해 새로 만들어야 하고, 풀던 답과 점수는 그대로입니다. 본인 확인 후 진행하세요. 계속할까요?')) return;
+      api('t_pwreset', { pw: PW, id: d.id }).then(function () { alert('초기화되었습니다.'); openDetail(d.id); }).catch(function (e) { alert(e.message); });
     };
     function cancelLeave(n) {
       var msg = n == null ? d.id + ' 학생의 이탈 기록 전체를 취소하고 이탈 횟수·시간·감점을 0으로 되돌립니다. 계속할까요?'

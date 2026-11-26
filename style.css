@@ -148,6 +148,9 @@ body.monitor { background: #0b1118; color: #e8eef5; }
 .mon-card .cnt { font-size: 3.2rem; font-weight: 900; line-height: 1.1; color: #4cc17f; }
 .mon-card .cnt small { font-size: 1rem; color: #9bacbd; font-weight: 700; margin-left: 4px; }
 .mon-card .tm { font-size: 1.15rem; color: #b8c7d6; font-variant-numeric: tabular-nums; }
+.pwinput { width: 100%; padding: 12px 14px; font-size: 1.15rem; font-family: var(--mono); letter-spacing: .06em; border: 2px solid var(--line, #c9d2dc); border-radius: 10px; background: var(--card, #fff); color: inherit; box-sizing: border-box; }
+.pwrule { min-height: 1.6em; margin: 8px 0 4px; font-weight: 700; font-size: .95rem; }
+.pwrule .ok { color: #1f9d55; } .pwrule .bad { color: #c0392b; }
 .mon-card .cnt { position: relative; }
 .mon-card .minus { position: absolute; right: -4px; top: 50%; transform: translateY(-50%); width: 38px; height: 38px; border-radius: 50%; border: 2px solid #5b6b7c; background: #0b1118; color: #e8eef5; font-size: 1.6rem; font-weight: 900; line-height: 1; cursor: pointer; padding: 0; }
 .mon-card .minus:hover { background: #223040; border-color: #9bacbd; }

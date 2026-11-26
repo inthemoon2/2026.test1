@@ -7,7 +7,9 @@
     if (!cfg.API_URL) {
       return Promise.reject(new Error('config.js 의 API_URL 이 비어 있습니다. README.md 의 배포 순서를 확인하세요.'));
     }
-    var body = JSON.stringify(Object.assign({ action: action }, data || {}));
+    var payload = Object.assign({ action: action }, data || {});
+    if (window.STUDENT_TOK && payload.tok === undefined && payload.pw === undefined) payload.tok = window.STUDENT_TOK;   // 학생 로그인 토큰 자동 첨부
+    var body = JSON.stringify(payload);
     function once() {
       return fetch(cfg.API_URL, {
         method: 'POST',

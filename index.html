@@ -15,8 +15,28 @@
     <p class="muted">수행평가 · 남극 펭귄 데이터</p>
     <p style="margin-top:22px;font-weight:700">학번을 4자리 숫자로 입력하세요</p>
     <input id="idin" class="idinput" inputmode="numeric" maxlength="4" autocomplete="off" aria-label="학번 4자리">
+    <p style="margin:18px 0 6px;font-weight:700">비밀번호</p>
+    <input id="pwin" class="pwinput" type="password" maxlength="20" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="비밀번호">
+    <label class="check" style="margin-top:6px"><input type="checkbox" id="pw-show"> 비밀번호 보이기</label>
+    <p class="muted" style="font-size:.85rem;margin:8px 0 0">처음 접속하는 경우에는 비밀번호 칸을 <b>비워 둔 채</b> 확인을 누르세요. 다음 화면에서 내 비밀번호를 만듭니다.</p>
     <div id="login-err" class="err"></div>
     <button id="login-btn" class="btn" style="width:100%">확인</button>
+  </div>
+</div>
+
+<!-- 1-2. 비밀번호 만들기 -->
+<div id="s-setpw" class="wrap login hidden">
+  <div class="card">
+    <h1>비밀번호 만들기</h1>
+    <p class="muted" style="margin-top:4px">다른 사람이 내 시험과 성적을 볼 수 없도록 나만의 비밀번호를 만듭니다.</p>
+    <div class="alert" style="margin:14px 0">
+      <b>형식:</b> <code>hyein</code> + <b>내가 자주 쓰는 숫자 4자리</b> + <code>!</code> (총 10자리)
+    </div>
+    <input id="newpw" class="pwinput" type="text" maxlength="10" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="새 비밀번호">
+    <div id="pw-rule" class="pwrule"></div>
+    <div id="setpw-err" class="err"></div>
+    <button id="setpw-btn" class="btn" style="width:100%" disabled>비밀번호 저장하고 계속</button>
+    <p class="muted" style="font-size:.85rem;margin-top:10px">입력하는 내용이 그대로 보입니다. 주변 사람이 보지 못하게 주의하고, 잊지 않도록 기억해 두세요. 잊어버리면 선생님께 초기화를 요청해야 합니다.</p>
   </div>
 </div>
 
@@ -92,7 +112,7 @@
   var quizOn = false, away = null, activeMs = 0, tickAt = null, submitting = false;
 
   function show(name) {
-    ['s-login', 's-notice', 's-quiz', 's-result'].forEach(function (s) { $(s).classList.toggle('hidden', s !== name); });
+    ['s-login', 's-setpw', 's-notice', 's-quiz', 's-result'].forEach(function (s) { $(s).classList.toggle('hidden', s !== name); });
     window.scrollTo(0, 0);
   }
   function setPen(p) { S.pen = p; [].forEach.call(document.querySelectorAll('.pen'), function (e) { e.textContent = p; }); }
@@ -116,20 +136,50 @@
   $('idin').addEventListener('input', function () { this.value = this.value.replace(/\D/g, '').slice(0, 4); $('login-err').textContent = ''; });
   $('idin').addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
   $('login-btn').onclick = doLogin;
+  $('pwin').addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
+  $('pwin').addEventListener('input', function () { $('login-err').textContent = ''; });
+  $('pw-show').onchange = function () { $('pwin').type = this.checked ? 'text' : 'password'; };
+
+  // 비밀번호 만들기: hyein + 숫자 4자리 + ! (총 10자리), 입력 내용이 그대로 보임
+  var PW_RE = /^hyein[0-9]{4}!$/;
+  function checkNewPw() {
+    var v = $('newpw').value, ok = PW_RE.test(v), msg;
+    if (!v) msg = '';
+    else if (ok) msg = '<span class="ok">✔ 사용할 수 있는 형식입니다</span>';
+    else if (v.length < 10) msg = '<span class="bad">… 아직 ' + (10 - v.length) + '글자가 더 필요합니다 (현재 ' + v.length + '자)</span>';
+    else msg = '<span class="bad">✘ hyein + 숫자 4자리 + ! 형식이 아닙니다</span>';
+    $('pw-rule').innerHTML = msg;
+    $('setpw-btn').disabled = !ok;
+    $('setpw-err').textContent = '';
+  }
+  $('newpw').addEventListener('input', checkNewPw);
+  $('newpw').addEventListener('keydown', function (e) { if (e.key === 'Enter' && !$('setpw-btn').disabled) $('setpw-btn').click(); });
+  $('setpw-btn').onclick = function () {
+    var btn = this; btn.disabled = true;
+    api('setpw', { id: S.id, pw: $('newpw').value }).then(function (r) { onEntered(S.id, r); })
+      .catch(function (e) { $('setpw-err').textContent = e.message; btn.disabled = !PW_RE.test($('newpw').value); });
+  };
 
   function doLogin() {
     var id = $('idin').value.trim();
     if (!ID_RE.test(id)) { $('login-err').textContent = '학번 4자리를 정확히 입력하세요.'; return; }
     $('login-btn').disabled = true;
-    api('login', { id: id }).then(function (r) {
+    api('login', { id: id, pw: $('pwin').value }).then(function (r) {
+      if (r.state === 'setpw') { S.id = id; $('newpw').value = ''; checkNewPw(); show('s-setpw'); $('newpw').focus(); return; }
+      onEntered(id, r);
+    }).catch(function (e) { $('login-err').textContent = e.message; })
+      .then(function () { $('login-btn').disabled = false; });
+  }
+
+  function onEntered(id, r) {
+      window.STUDENT_TOK = r.tok || '';
+      $('pwin').value = ''; $('newpw').value = '';
       S.id = id; setPen(r.penaltyPerLeave || 5);
       if (r.state === 'done') { S.result = r.result; showResult(r.result); return; }
       S.progress = r.progress; S.leaveCount = r.leaveCount; S.leaveSec = r.leaveSec; S.cur = r.progress + 1;
       $('notice-title').textContent = r.progress > 0 ? id + ' · ' + r.progress + '문항까지 제출했습니다. 이어서 진행합니다' : '시작하기 전에 꼭 읽으세요';
       $('start-btn').textContent = r.remainSec != null ? '이어서 풀기 (남은 시간 ' + fmtClock(r.remainSec) + ')' : '평가 시작 (30분 시작)';
       show('s-notice');
-    }).catch(function (e) { $('login-err').textContent = e.message; })
-      .then(function () { $('login-btn').disabled = false; });
   }
 
   $('agree').onchange = function () { $('start-btn').disabled = !this.checked; };
