@@ -148,6 +148,12 @@ body.monitor { background: #0b1118; color: #e8eef5; }
 .mon-card .cnt { font-size: 3.2rem; font-weight: 900; line-height: 1.1; color: #4cc17f; }
 .mon-card .cnt small { font-size: 1rem; color: #9bacbd; font-weight: 700; margin-left: 4px; }
 .mon-card .tm { font-size: 1.15rem; color: #b8c7d6; font-variant-numeric: tabular-nums; }
+.mon-card .cnt { position: relative; }
+.mon-card .minus { position: absolute; right: -4px; top: 50%; transform: translateY(-50%); width: 38px; height: 38px; border-radius: 50%; border: 2px solid #5b6b7c; background: #0b1118; color: #e8eef5; font-size: 1.6rem; font-weight: 900; line-height: 1; cursor: pointer; padding: 0; }
+.mon-card .minus:hover { background: #223040; border-color: #9bacbd; }
+.mon-card .minus:disabled { opacity: .4; cursor: wait; }
+.mon-card .donetag { margin-top: 4px; color: #6fd6a0; font-weight: 800; font-size: .95rem; }
+.mon-card .remtag { margin-top: 2px; color: #9bacbd; font-size: .9rem; font-variant-numeric: tabular-nums; }
 .mon-card.l1 { border-color: #f0a94a; } .mon-card.l1 .cnt { color: #f0a94a; }
 .mon-card.l2 { border-color: #ff7b73; } .mon-card.l2 .cnt { color: #ff7b73; }
 .mon-card.away { background: #4a1210; border-color: #ff4d44; animation: blink 1s infinite; }

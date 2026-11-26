@@ -136,6 +136,11 @@
     if (k === 'sec') return s.sec.reduce(function (a, b) { return a + b; }, 0);
     return s[k];
   }
+  // 제출한 학생을 포함해, 지금 시각 기준 남은 시험 시간(초). 시작 전이면 null
+  function liveRemain(s) {
+    if (s.quizStart == null) return null;
+    return Math.max(0, Math.round((s.quizStart + (s.examSec || DATA.examSec) * 1000 - (Date.now() + DATA.skew)) / 1000));
+  }
   // 진행 중인 학생의 남은 시험 시간(초). 시작 전이면 null
   function remain(s) {
     if (s.status === '제출' || s.quizStart == null) return null;
@@ -152,7 +157,7 @@
       var fin = s.status === '제출';
       var awayNow = s.away != null;
       h += '<tr class="clickable" data-id="' + s.id + '"><td>' + s.id + (s.demo ? ' <span class="muted" style="font-size:.7rem">예시</span>' : '') + '</td>' +
-        '<td>' + (fin ? '<span class="pill done">제출</span>' + (s.timeup ? ' <span class="pill hot">시간종료</span>' : '') : awayNow ? '<span class="pill hot">이탈 중</span>' : '<span class="pill run">진행 중</span>') + '</td>' +
+        '<td>' + (fin ? '<span class="pill done">제출 완료</span>' + (s.timeup ? ' <span class="pill hot">시간종료</span>' : (liveRemain(s) != null ? ' <span class="muted" style="font-size:.78rem">⏱ ' + (liveRemain(s) > 0 ? fmtClock(liveRemain(s)) + ' 남음' : '시험 종료') + '</span>' : '')) : awayNow ? '<span class="pill hot">이탈 중</span>' : '<span class="pill run">진행 중</span>') + '</td>' +
         '<td>' + s.progress + ' / 12' + (remain(s) != null ? ' <span class="muted" style="font-size:.78rem">· ' + fmtClock(remain(s)) + ' 남음</span>' : '') + '</td>' +
         [0, 1, 2, 3].map(function (i) { return '<td>' + (fin ? s.areas[i] : '–') + '</td>'; }).join('') +
         '<td>' + (fin ? s.raw : '–') + '</td><td>' + (s.penalty ? '−' + s.penalty : (fin ? '0' : '–')) + '</td>' +
